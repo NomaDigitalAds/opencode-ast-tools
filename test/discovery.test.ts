@@ -1,5 +1,5 @@
 import path from "node:path"
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { afterEach, describe, expect, it } from "vitest"
 import { HARD_LIMITS } from "../src/constants.js"
@@ -11,8 +11,9 @@ const directories: string[] = []
 
 async function fixture(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "opencode-ast-discovery-"))
-  directories.push(directory)
-  return directory
+  const canonical = await realpath(directory)
+  directories.push(canonical)
+  return canonical
 }
 
 function request(realWorktree: string, overrides: Partial<DiscoveryRequest> = {}): DiscoveryRequest {

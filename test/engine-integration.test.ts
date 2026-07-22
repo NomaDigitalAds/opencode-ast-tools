@@ -1,5 +1,5 @@
 import path from "node:path"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { ENGINE_VERSION, LANGUAGES } from "../src/constants.js"
@@ -56,6 +56,7 @@ describe.runIf(integration)("ast-grep language matrix", () => {
   beforeAll(async () => {
     engine = resolveEngine(ENGINE_VERSION)
     directory = await mkdtemp(path.join(tmpdir(), "opencode-ast-tools-engine-"))
+    directory = await realpath(directory)
     await Promise.all(
       LANGUAGES.map(async (language) => {
         const fixture = fixtures[language]
