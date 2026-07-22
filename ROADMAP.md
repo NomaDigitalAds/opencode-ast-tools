@@ -16,6 +16,7 @@ Already implemented:
 - Tarball installation, tool execution, permission handling, timeout, and cancellation in a real OpenCode instance.
 - Deterministic discovery capped at 10,000 language-eligible files with platform-safe command chunking.
 - Fault-injected staging, cleanup, commit, rollback, and path-swap coverage.
+- Public `0.1.0-alpha.1` package with SLSA provenance, SBOM, Trusted Publishing, and registry-based OpenCode smoke coverage.
 
 ## Phase 1: CI Baseline
 
@@ -77,7 +78,7 @@ Exit criterion: every apply guarantee has a corresponding failure-path test.
 
 ## Phase 5: Public Alpha
 
-Status: in progress.
+Status: complete.
 
 Goal: publish a usable version without promising premature stability.
 
