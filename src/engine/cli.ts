@@ -25,6 +25,8 @@ export type EngineRequest = {
   timeoutMs: number
   signal: AbortSignal
   cwd: string
+  outputLimitBytes?: number
+  preselectedPaths?: boolean
 }
 
 export type EngineResult = {
@@ -153,17 +155,58 @@ function buildArguments(request: EngineRequest): string[] {
     String(request.contextLines),
   ]
   if (request.replacement !== undefined) args.push("--rewrite", request.replacement)
-  for (const glob of request.exclude) args.push("--globs", `!${glob}`)
-  if (request.allowIgnoredFiles) {
-    for (const glob of request.include) args.push("--globs", glob)
-  }
-  if (!request.respectGitignore) {
+  if (request.preselectedPaths) {
     for (const kind of ["hidden", "dot", "exclude", "global", "parent", "vcs"]) {
       args.push("--no-ignore", kind)
+    }
+  } else {
+    for (const glob of request.exclude) args.push("--globs", `!${glob}`)
+    if (request.allowIgnoredFiles) {
+      for (const glob of request.include) args.push("--globs", glob)
+    }
+    if (!request.respectGitignore) {
+      for (const kind of ["hidden", "dot", "exclude", "global", "parent", "vcs"]) {
+        args.push("--no-ignore", kind)
+      }
     }
   }
   args.push("--", ...request.paths)
   return args
+}
+
+const SAFE_COMMAND_LINE_UNITS = 24 * 1024
+
+function argumentUnits(value: string): number {
+  let units = 3
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    units += character === "\\" || character === '"' ? 2 : 1
+  }
+  return units
+}
+
+export function chunkEnginePaths(engine: Engine, request: EngineRequest): string[][] {
+  if (request.paths.length === 0) return []
+  const baseUnits = argumentUnits(engine.executable) + buildArguments({ ...request, paths: [] })
+    .reduce((total, argument) => total + argumentUnits(argument), 0)
+  const chunks: string[][] = []
+  let chunk: string[] = []
+  let units = baseUnits
+  for (const file of request.paths) {
+    const fileUnits = argumentUnits(file)
+    if (baseUnits + fileUnits > SAFE_COMMAND_LINE_UNITS) {
+      throw new AstToolError("LIMIT_EXCEEDED", "ast-grep command arguments exceed the safe platform limit")
+    }
+    if (units + fileUnits > SAFE_COMMAND_LINE_UNITS) {
+      chunks.push(chunk)
+      chunk = []
+      units = baseUnits
+    }
+    chunk.push(file)
+    units += fileUnits
+  }
+  if (chunk.length > 0) chunks.push(chunk)
+  return chunks
 }
 
 function engineFailure(stderr: string): AstToolError {
@@ -174,7 +217,7 @@ function engineFailure(stderr: string): AstToolError {
   return new AstToolError("ENGINE_OUTPUT_INVALID", message)
 }
 
-export async function runEngine(engine: Engine, request: EngineRequest): Promise<EngineResult> {
+async function runEngineProcess(engine: Engine, request: EngineRequest, outputLimitBytes: number): Promise<EngineResult> {
   if (request.signal.aborted) throw new AstToolError("ABORTED", "operation was aborted")
 
   return await new Promise<EngineResult>((resolve, reject) => {
@@ -219,7 +262,7 @@ export async function runEngine(engine: Engine, request: EngineRequest): Promise
     if (request.signal.aborted) onAbort()
     child.stdout?.on("data", (chunk: Buffer) => {
       stdoutBytes += chunk.length
-      if (stdoutBytes > HARD_LIMITS.engineOutputBytes) {
+      if (stdoutBytes > outputLimitBytes) {
         outputExceeded = true
         terminateProcess(child)
         return
@@ -238,7 +281,7 @@ export async function runEngine(engine: Engine, request: EngineRequest): Promise
       cleanup()
       if (aborted) return reject(new AstToolError("ABORTED", "operation was aborted"))
       if (timedOut) return reject(new AstToolError("ENGINE_TIMEOUT", `ast-grep exceeded ${request.timeoutMs}ms`))
-      if (outputExceeded) return reject(new AstToolError("LIMIT_EXCEEDED", "ast-grep stdout exceeded 8 MiB"))
+      if (outputExceeded) return reject(new AstToolError("LIMIT_EXCEEDED", "combined ast-grep stdout exceeded 8 MiB"))
 
       const output = Buffer.concat(stdout).toString("utf8")
       const errorOutput = Buffer.concat(stderr).toString("utf8")
@@ -252,4 +295,30 @@ export async function runEngine(engine: Engine, request: EngineRequest): Promise
       }
     })
   })
+}
+
+export async function runEngine(engine: Engine, request: EngineRequest): Promise<EngineResult> {
+  const chunks = chunkEnginePaths(engine, request)
+  if (chunks.length === 0) return { matches: [], warnings: [], outputBytes: 0 }
+  const deadline = Date.now() + request.timeoutMs
+  const outputLimitBytes = Math.min(request.outputLimitBytes ?? HARD_LIMITS.engineOutputBytes, HARD_LIMITS.engineOutputBytes)
+  const matches: EngineMatch[] = []
+  const warnings: string[] = []
+  let outputBytes = 0
+  for (const paths of chunks) {
+    const timeoutMs = deadline - Date.now()
+    if (timeoutMs <= 0) throw new AstToolError("ENGINE_TIMEOUT", `ast-grep exceeded ${request.timeoutMs}ms`)
+    const remainingOutputBytes = outputLimitBytes - outputBytes
+    if (remainingOutputBytes <= 0) {
+      throw new AstToolError("LIMIT_EXCEEDED", "combined ast-grep stdout exceeded 8 MiB")
+    }
+    const result = await runEngineProcess(engine, { ...request, paths, timeoutMs }, remainingOutputBytes)
+    matches.push(...result.matches)
+    outputBytes += result.outputBytes
+    for (const warning of result.warnings) {
+      if (warnings.length === 20) break
+      if (!warnings.includes(warning)) warnings.push(warning)
+    }
+  }
+  return { matches, warnings, outputBytes }
 }

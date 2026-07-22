@@ -29,6 +29,11 @@ export type AstSearchResult = {
   matches: AstSearchMatch[]
   totalSeen: number
   truncated: boolean
+  discovery: {
+    files: number
+    limit: number
+    truncated: boolean
+  }
   warnings: string[]
 }
 

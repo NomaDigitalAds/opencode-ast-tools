@@ -4,6 +4,7 @@ import { DEFAULTS, HARD_LIMITS, LANGUAGES, PLUGIN_VERSION } from "../constants.j
 import { applyEdits, prepareEdits } from "../edits.js"
 import { runEngine, type Engine } from "../engine/cli.js"
 import { AstToolError } from "../errors.js"
+import { discoverFiles, matchesGlobs } from "../filesystem/discovery.js"
 import { loadFile, resolveWorktree, validateScopePaths } from "../filesystem/scope.js"
 import { sha256 } from "../hash.js"
 import { createUnifiedDiff } from "../output/diff.js"
@@ -17,7 +18,7 @@ import {
   validateLanguage,
   validatePaths,
 } from "../validation.js"
-import { askRead, matchesGlobs } from "./shared.js"
+import { askRead } from "./shared.js"
 
 export function createReplaceTool(engine: Engine, config: PluginConfig, store: PlanStore): ToolDefinition {
   return tool({
@@ -66,9 +67,26 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
       const realWorktree = await resolveWorktree(context.worktree)
       const paths = await validateScopePaths(realWorktree, requestedPaths)
       await askRead(context, paths, "ast_grep_replace")
+      const deadline = Date.now() + DEFAULTS.replaceTimeoutMs
+      const discovery = await discoverFiles({
+        realWorktree,
+        scopes: paths,
+        language: args.language,
+        include,
+        exclude,
+        respectGitignore: config.respectGitignore,
+        allowIgnoredFiles: config.allowIgnoredFiles,
+        signal: context.abort,
+        deadline,
+      })
+      if (discovery.truncated) {
+        throw new AstToolError(
+          "LIMIT_EXCEEDED",
+          `rewrite scope exceeds the ${discovery.limit}-file discovery limit; no plan was created`,
+        )
+      }
       const editsByPath = new Map<string, AstEdit[]>()
       const warnings: string[] = []
-      const deadline = Date.now() + DEFAULTS.replaceTimeoutMs
       let engineOutputBytes = 0
       let replacementCount = 0
 
@@ -81,7 +99,7 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
           pattern: operation.pattern,
           replacement: operation.replacement,
           language: args.language,
-          paths,
+          paths: discovery.paths,
           include,
           exclude,
           contextLines: 0,
@@ -90,6 +108,8 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
           timeoutMs: remainingTime,
           signal: context.abort,
           cwd: realWorktree,
+          outputLimitBytes: HARD_LIMITS.engineOutputBytes - engineOutputBytes,
+          preselectedPaths: true,
         })
         engineOutputBytes += result.outputBytes
         if (engineOutputBytes > HARD_LIMITS.engineOutputBytes) {
@@ -131,6 +151,8 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
           throw new AstToolError("ENGINE_TIMEOUT", `preview exceeded ${DEFAULTS.replaceTimeoutMs}ms`)
         }
         const snapshot = await loadFile(realWorktree, relativePath)
+        if (context.abort.aborted) throw new AstToolError("ABORTED", "operation was aborted")
+        if (Date.now() > deadline) throw new AstToolError("ENGINE_TIMEOUT", "preview timed out while loading files")
         const edits = prepareEdits(snapshot.bytes, rawEdits)
         if (edits.length === 0) continue
         if (files.length >= maxFiles) {
@@ -162,6 +184,7 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
           output: "Preview only. Does not modify files. The rewrite produced no byte changes, so no plan was created.",
           metadata: {
             engine: { name: "ast-grep", version: engine.version },
+            discovery: { files: discovery.files, limit: discovery.limit, truncated: discovery.truncated },
             totals: { files: 0, replacements: 0, diffBytes: 0 },
             warnings: warnings.slice(0, 20),
           },
@@ -176,6 +199,7 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
           throw new AstToolError("ENGINE_TIMEOUT", `preview exceeded ${DEFAULTS.replaceTimeoutMs}ms`)
         }
         const diff = createUnifiedDiff(file.relativePath, file.before, file.after, maximumDiffBytes)
+        if (Date.now() > deadline) throw new AstToolError("ENGINE_TIMEOUT", "preview timed out while rendering diffs")
         previews.push({
           path: file.relativePath,
           replacements: file.replacements,
@@ -202,6 +226,7 @@ export function createReplaceTool(engine: Engine, config: PluginConfig, store: P
           planId: plan.id,
           expiresAt: new Date(plan.expiresAt).toISOString(),
           engine: { name: "ast-grep", version: engine.version },
+          discovery: { files: discovery.files, limit: discovery.limit, truncated: discovery.truncated },
           totals: {
             files: files.length,
             replacements: files.reduce((total, file) => total + file.replacements, 0),

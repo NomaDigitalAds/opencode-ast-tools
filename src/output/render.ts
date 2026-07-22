@@ -16,6 +16,9 @@ export function renderSearch(result: AstSearchResult): string {
   const output = [
     `ast-grep ${result.engine.version}: ${result.matches.length} match(es), ${result.totalSeen} seen${result.truncated ? " (truncated)" : ""}`,
   ]
+  if (result.discovery.truncated) {
+    output.push(`warning: scope exceeded ${result.discovery.limit} eligible files; searched the first ${result.discovery.files}`)
+  }
   let currentPath = ""
   for (const match of result.matches) {
     if (match.path !== currentPath) {
