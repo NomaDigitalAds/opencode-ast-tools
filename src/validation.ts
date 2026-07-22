@@ -26,7 +26,7 @@ export function validateByteLength(
 }
 
 export function validateRelativePath(value: string, label = "path"): string {
-  if (!value || value.includes("\0") || path.isAbsolute(value)) {
+  if (!value || value.includes("\0") || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
     throw new AstToolError("PATH_OUTSIDE_WORKTREE", `${label} must be a non-empty relative path`)
   }
 
@@ -51,7 +51,13 @@ export function validateGlobs(values: string[] | undefined, label: string): stri
     throw new AstToolError("INVALID_ARGUMENT", `${label} must contain at most ${HARD_LIMITS.globs} entries`)
   }
   return values.map((value, index) => {
-    if (!value || value.includes("\0") || path.isAbsolute(value) || value.startsWith("!")) {
+    if (
+      !value ||
+      value.includes("\0") ||
+      path.posix.isAbsolute(value) ||
+      path.win32.isAbsolute(value) ||
+      value.startsWith("!")
+    ) {
       throw new AstToolError("INVALID_ARGUMENT", `${label}[${index}] must be a relative glob without a leading '!'`)
     }
     const normalized = value.replaceAll("\\", "/")

@@ -50,7 +50,7 @@ describe("filesystem safety", () => {
   it("rejects non-UTF-8 files", async () => {
     const { directory, filePath } = await fixture()
     await writeFile(filePath, Buffer.from([0xff, 0xfe]))
-    await expect(loadFile(directory, "main.ts")).rejects.toThrowError("FILE_PARSE_ERROR")
+    await expect(loadFile(await realpath(directory), "main.ts")).rejects.toThrowError("FILE_PARSE_ERROR")
   })
 
   it("commits staged bytes while preserving CRLF", async () => {
