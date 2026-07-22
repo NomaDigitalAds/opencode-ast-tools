@@ -1,5 +1,6 @@
 import path from "node:path"
 import { createRequire } from "node:module"
+import { pathToFileURL } from "node:url"
 import { createServer } from "node:net"
 import { spawn, execFile, type ChildProcess } from "node:child_process"
 import { promisify } from "node:util"
@@ -176,11 +177,28 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
     })
     const packageName = (JSON.parse(packed.stdout) as Array<{ filename: string }>)[0]?.filename
     if (!packageName) throw new Error("npm pack did not return a package filename")
-    const packageSpec = `opencode-ast-tools@file:${path.join(project, packageName).replaceAll("\\", "/")}`
 
     const home = path.join(root, "home")
     const configDirectory = path.join(home, ".config", "opencode")
     await Promise.all([mkdir(configDirectory, { recursive: true }), mkdir(path.join(home, "tmp"), { recursive: true })])
+    await execFileAsync(
+      process.execPath,
+      [
+        npmCli,
+        "install",
+        "--prefix",
+        configDirectory,
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        path.join(project, packageName),
+        "@ai-sdk/openai-compatible@3.0.14",
+      ],
+      { cwd: project, timeout: 120_000 },
+    )
+    const pluginEntry = pathToFileURL(
+      path.join(configDirectory, "node_modules", "opencode-ast-tools", "dist", "plugin.js"),
+    ).href
     const config = {
       $schema: "https://opencode.ai/config.json",
       logLevel: "DEBUG",
@@ -206,7 +224,7 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
           },
         },
       },
-      plugin: [packageSpec],
+      plugin: [pluginEntry],
     }
     const port = await freePort()
     const packagePath = require.resolve("opencode-ai/package.json")

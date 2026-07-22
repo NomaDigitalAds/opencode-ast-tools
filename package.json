@@ -36,6 +36,7 @@
     "minimatch": "10.2.5"
   },
   "devDependencies": {
+    "@ai-sdk/openai-compatible": "3.0.14",
     "@opencode-ai/sdk": "1.18.4",
     "@types/node": "24.0.14",
     "opencode-ai": "1.18.4",
