@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url"
 import { createServer } from "node:net"
 import { spawn, execFile, type ChildProcess } from "node:child_process"
 import { promisify } from "node:util"
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { createOpencodeClient, type PermissionAction, type PermissionRule, type ToolPart } from "@opencode-ai/sdk/v2"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -171,35 +171,39 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
 
     const npmCli = process.env.npm_execpath
     if (!npmCli) throw new Error("npm_execpath is required to pack the smoke artifact")
-    const packed = await execFileAsync(process.execPath, [npmCli, "pack", "--json", "--pack-destination", project], {
+    const packageSource = process.env.OPENCODE_SMOKE_PACKAGE
+    const packArguments = [npmCli, "pack"]
+    if (packageSource) packArguments.push(packageSource)
+    packArguments.push("--json", "--pack-destination", project)
+    const packed = await execFileAsync(process.execPath, packArguments, {
       cwd: process.cwd(),
       timeout: 120_000,
     })
-    console.log("[opencode-smoke] packed npm artifact")
+    console.log(`[opencode-smoke] packed ${packageSource ?? "local npm artifact"}`)
     const packageName = (JSON.parse(packed.stdout) as Array<{ filename: string }>)[0]?.filename
     if (!packageName) throw new Error("npm pack did not return a package filename")
 
     const home = path.join(root, "home")
     const configDirectory = path.join(home, ".config", "opencode")
     await Promise.all([mkdir(configDirectory, { recursive: true }), mkdir(path.join(home, "tmp"), { recursive: true })])
-    const extracted = path.join(root, "packed")
-    await mkdir(extracted)
-    await execFileAsync("tar", ["-xzf", path.join(project, packageName), "-C", extracted], {
-      cwd: project,
-      timeout: 30_000,
-    })
-    const rootNodeModules = path.join(process.cwd(), "node_modules")
-    const linkType = process.platform === "win32" ? "junction" : "dir"
-    await Promise.all([
-      symlink(rootNodeModules, path.join(extracted, "package", "node_modules"), linkType),
-      symlink(rootNodeModules, path.join(configDirectory, "node_modules"), linkType),
-      writeFile(
-        path.join(configDirectory, "package.json"),
-        JSON.stringify({ dependencies: { "@ai-sdk/openai-compatible": "3.0.14" } }),
-      ),
-    ])
-    console.log("[opencode-smoke] extracted packed artifact")
-    const pluginEntry = pathToFileURL(path.join(extracted, "package", "dist", "plugin.js")).href
+    await writeFile(path.join(configDirectory, "package.json"), JSON.stringify({ private: true }))
+    await execFileAsync(
+      process.execPath,
+      [
+        npmCli,
+        "install",
+        "--no-audit",
+        "--no-fund",
+        "--save-exact",
+        path.join(project, packageName),
+        "@ai-sdk/openai-compatible@3.0.14",
+      ],
+      { cwd: configDirectory, timeout: 120_000 },
+    )
+    console.log("[opencode-smoke] installed packed artifact")
+    const pluginEntry =
+      packageSource ??
+      pathToFileURL(path.join(configDirectory, "node_modules", "opencode-ast-tools", "dist", "plugin.js")).href
     const config = {
       $schema: "https://opencode.ai/config.json",
       logLevel: "DEBUG",

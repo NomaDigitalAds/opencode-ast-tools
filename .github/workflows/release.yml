@@ -1,23 +1,44 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      package-version: ${{ steps.metadata.outputs.package-version }}
+      package-tarball: ${{ steps.metadata.outputs.package-tarball }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: 24
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.18.0
           registry-url: https://registry.npmjs.org
-          cache: npm
+      - run: npm install --global npm@11.16.0
+      - name: Validate release metadata
+        id: metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          test "$RELEASE_TAG" = "v$PACKAGE_VERSION"
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "package-version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "package-tarball=opencode-ast-tools-$PACKAGE_VERSION.tgz" >> "$GITHUB_OUTPUT"
       - run: npm ci
       - run: npm run check
       - run: npm run check:test
@@ -28,11 +49,77 @@ jobs:
       - run: npm run test:opencode
         env:
           OPENCODE_SMOKE: "1"
-      - run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
-      - uses: actions/upload-artifact@v4
+      - run: npm run pack:release
+      - name: Generate production SBOM from the tarball
+        env:
+          PACKAGE_TARBALL: ${{ steps.metadata.outputs.package-tarball }}
+        run: |
+          mkdir "$RUNNER_TEMP/release-sbom"
+          node -e "require('fs').writeFileSync('$RUNNER_TEMP/release-sbom/package.json', JSON.stringify({ name: 'release-sbom', version: '1.0.0', private: true }))"
+          npm install --prefix "$RUNNER_TEMP/release-sbom" --ignore-scripts --no-audit --no-fund "$GITHUB_WORKSPACE/$PACKAGE_TARBALL"
+          npm sbom --prefix "$RUNNER_TEMP/release-sbom" --omit=dev --sbom-format cyclonedx > sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sbom
-          path: sbom.cdx.json
-      - run: npm publish --provenance --access public
+          name: release-artifacts
+          path: |
+            ${{ steps.metadata.outputs.package-tarball }}
+            sbom.cdx.json
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-artifacts
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.18.0
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.16.0
+      # NPM_TOKEN bootstraps the first publish; npm OIDC takes over after Trusted Publishing is configured.
+      - run: npm publish "${{ needs.build.outputs.package-tarball }}" --tag alpha --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  verify:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.18.0
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.16.0
+      - run: npm ci
+      - name: Wait for the published tarball
+        env:
+          PACKAGE_SPEC: opencode-ast-tools@${{ needs.build.outputs.package-version }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if npm pack "$PACKAGE_SPEC" --dry-run --json > /dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+      - run: npm run test:opencode
+        env:
+          OPENCODE_SMOKE: "1"
+          OPENCODE_SMOKE_PACKAGE: opencode-ast-tools@${{ needs.build.outputs.package-version }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-artifacts
+      - run: gh release create "$GITHUB_REF_NAME" "${{ needs.build.outputs.package-tarball }}" sbom.cdx.json --generate-notes --prerelease --title "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}
