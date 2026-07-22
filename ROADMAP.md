@@ -11,19 +11,18 @@ Already implemented:
 - Path containment, UTF-8 validation, file-size limits, and bounded output.
 - Immutable previews, hashes, TTL, ownership, overlap detection, and single-use apply.
 - Same-directory staging, staleness revalidation, and best-effort rollback.
-- Unit tests, integration fixtures for all 25 languages, and npm package builds.
+- Unit tests, integration fixtures for all 25 languages on every Tier 1 platform, and npm package builds.
 - CI, dependency review, SBOM, provenance, and npm release workflows.
+- Tarball installation, tool execution, permission handling, timeout, and cancellation in a real OpenCode instance.
 
 Not yet proven end-to-end:
 
-- Workflow execution in a real GitHub repository.
-- Parity of all 25 fixtures with the native binary on every Tier 1 platform.
-- Plugin installation and tool execution inside a real OpenCode instance.
-- Actual OpenCode permission behavior for `allow`, `ask`, and `deny`.
 - An exact 10,000-file discovery limit.
 - Fault-injected flush, rename, and partial rollback behavior.
 
 ## Phase 1: CI Baseline
+
+Status: complete.
 
 Goal: turn the existing tests into reproducible evidence outside the development machine.
 
@@ -36,6 +35,8 @@ Goal: turn the existing tests into reproducible evidence outside the development
 Exit criterion: every Tier 1 platform is green on the same commit.
 
 ## Phase 2: Real OpenCode Smoke Test
+
+Status: complete.
 
 Goal: prove the package inside the host that will actually consume it.
 
