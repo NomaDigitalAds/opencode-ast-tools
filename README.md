@@ -94,6 +94,7 @@ Apply does not accept paths, patterns, replacements, caller-provided edits, `for
 - Only relative paths contained by the real worktree are accepted. Absolute paths, `..` traversal, symlink escapes, junction escapes, and non-regular result files are rejected.
 - The installed `@ast-grep/cli` executable is resolved directly and checked for version `0.44.1`. The plugin does not search `PATH`, invoke a shell, load project grammars, or download executables at runtime.
 - Files must be UTF-8 and no larger than 5 MiB. Rewrites operate on byte ranges, preserving BOM, line endings, and all bytes outside each range.
+- Discovery is deterministic and limited to 10,000 language-eligible files. Search reports a truncated scope; replace fails without creating a partial plan.
 - Identical edits are deduplicated and overlapping edits fail before staging.
 - Apply rechecks every source hash before staging and immediately before commit. A stale plan writes no files.
 - Outputs are bounded, terminal control characters are removed from model-facing text, and invalid engine JSON is an error rather than an empty result.

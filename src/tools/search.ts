@@ -3,6 +3,7 @@ import { DEFAULTS, HARD_LIMITS, LANGUAGES } from "../constants.js"
 import { runEngine, type Engine } from "../engine/cli.js"
 import { flattenCaptures } from "../engine/json.js"
 import { AstToolError } from "../errors.js"
+import { discoverFiles, matchesGlobs } from "../filesystem/discovery.js"
 import { loadFile, resolveWorktree, validateScopePaths } from "../filesystem/scope.js"
 import { renderSearch } from "../output/render.js"
 import type { AstSearchMatch, AstSearchResult, PluginConfig } from "../types.js"
@@ -14,7 +15,7 @@ import {
   validatePaths,
   validateRelativePath,
 } from "../validation.js"
-import { askRead, matchesGlobs } from "./shared.js"
+import { askRead } from "./shared.js"
 
 export function createSearchTool(engine: Engine, config: PluginConfig): ToolDefinition {
   return tool({
@@ -43,18 +44,32 @@ export function createSearchTool(engine: Engine, config: PluginConfig): ToolDefi
       const paths = await validateScopePaths(realWorktree, requestedPaths)
       await askRead(context, paths, "ast_grep_search")
       const deadline = Date.now() + DEFAULTS.searchTimeoutMs
+      const discovery = await discoverFiles({
+        realWorktree,
+        scopes: paths,
+        language: args.language,
+        include,
+        exclude,
+        respectGitignore: config.respectGitignore,
+        allowIgnoredFiles: config.allowIgnoredFiles,
+        signal: context.abort,
+        deadline,
+      })
+      const remainingTime = deadline - Date.now()
+      if (remainingTime <= 0) throw new AstToolError("ENGINE_TIMEOUT", "search timed out during file discovery")
       const engineResult = await runEngine(engine, {
         pattern: args.pattern,
         language: args.language,
-        paths,
+        paths: discovery.paths,
         include,
         exclude,
         contextLines,
         respectGitignore: config.respectGitignore,
         allowIgnoredFiles: config.allowIgnoredFiles,
-        timeoutMs: DEFAULTS.searchTimeoutMs,
+        timeoutMs: remainingTime,
         signal: context.abort,
         cwd: realWorktree,
+        preselectedPaths: true,
       })
 
       const candidates = engineResult.matches
@@ -76,6 +91,8 @@ export function createSearchTool(engine: Engine, config: PluginConfig): ToolDefi
         const snapshot = lastRequestedPath === relativePath
           ? lastSnapshot
           : await loadFile(realWorktree, relativePath)
+        if (context.abort.aborted) throw new AstToolError("ABORTED", "operation was aborted")
+        if (Date.now() > deadline) throw new AstToolError("ENGINE_TIMEOUT", "search timed out while validating matches")
         if (!snapshot) throw new AstToolError("PATH_NOT_FOUND", `path not found: ${relativePath}`)
         lastSnapshot = snapshot
         lastRequestedPath = relativePath
@@ -106,6 +123,11 @@ export function createSearchTool(engine: Engine, config: PluginConfig): ToolDefi
         matches: matches.slice(0, maxResults),
         totalSeen,
         truncated: totalSeen > maxResults,
+        discovery: {
+          files: discovery.files,
+          limit: discovery.limit,
+          truncated: discovery.truncated,
+        },
         warnings: engineResult.warnings,
       }
       const metadata = {

@@ -1,9 +1,10 @@
 import path from "node:path"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { ENGINE_VERSION, LANGUAGES } from "../src/constants.js"
 import { resolveEngine, runEngine, type Engine } from "../src/engine/cli.js"
+import { discoverFiles } from "../src/filesystem/discovery.js"
 import type { Language } from "../src/types.js"
 
 type Fixture = { extension: string; source: string; pattern: string; replacement: string }
@@ -55,12 +56,20 @@ describe.runIf(integration)("ast-grep language matrix", () => {
   beforeAll(async () => {
     engine = resolveEngine(ENGINE_VERSION)
     directory = await mkdtemp(path.join(tmpdir(), "opencode-ast-tools-engine-"))
+    directory = await realpath(directory)
     await Promise.all(
       LANGUAGES.map(async (language) => {
         const fixture = fixtures[language]
         await writeFile(path.join(directory, `${language}.${fixture.extension}`), fixture.source)
       }),
     )
+    await mkdir(path.join(directory, "discovery"))
+    await Promise.all([
+      writeFile(path.join(directory, ".gitignore"), "discovery/ignored.ts\n"),
+      writeFile(path.join(directory, "discovery", "[id].ts"), "console.log(id)\n"),
+      writeFile(path.join(directory, "discovery", "ignored.ts"), "console.log(ignored)\n"),
+      writeFile(path.join(directory, "discovery", ".hidden.ts"), "console.log(hidden)\n"),
+    ])
   })
 
   afterAll(async () => {
@@ -114,5 +123,63 @@ describe.runIf(integration)("ast-grep language matrix", () => {
     const aborted = runEngine(engine, { ...request, timeoutMs: 15_000, signal: controller.signal })
     setTimeout(() => controller.abort(), 1)
     await expect(aborted).rejects.toMatchObject({ code: "ABORTED" })
+  }, 30_000)
+
+  it("processes literal and ignore-override files from a preselected manifest", async () => {
+    const common = {
+      realWorktree: directory,
+      language: "typescript" as const,
+      exclude: [],
+      respectGitignore: true,
+      signal: new AbortController().signal,
+      deadline: Date.now() + 30_000,
+    }
+    const literal = await discoverFiles({
+      ...common,
+      scopes: ["discovery/[id].ts"],
+      include: [],
+      allowIgnoredFiles: false,
+    })
+    const override = await discoverFiles({
+      ...common,
+      scopes: ["discovery"],
+      include: ["discovery/ignored.ts", "discovery/.hidden.ts"],
+      allowIgnoredFiles: true,
+    })
+    const paths = [...literal.paths, ...override.paths]
+    const result = await runEngine(engine, {
+      pattern: "console.log($ARG)",
+      language: "typescript",
+      paths,
+      include: ["this glob is intentionally ignored for a preselected manifest"],
+      exclude: ["**/*.ts"],
+      contextLines: 0,
+      respectGitignore: true,
+      allowIgnoredFiles: false,
+      timeoutMs: 30_000,
+      signal: common.signal,
+      cwd: directory,
+      preselectedPaths: true,
+    })
+
+    expect(result.matches.map((match) => match.file.replaceAll("\\", "/")).sort()).toEqual([...paths].sort())
+  }, 30_000)
+
+  it("runs a large explicit manifest in multiple bounded commands", async () => {
+    const result = await runEngine(engine, {
+      pattern: "definitely_missing_identifier",
+      language: "typescript",
+      paths: Array.from({ length: 2_500 }, () => "typescript.ts"),
+      include: [],
+      exclude: [],
+      contextLines: 0,
+      respectGitignore: true,
+      allowIgnoredFiles: false,
+      timeoutMs: 30_000,
+      signal: new AbortController().signal,
+      cwd: directory,
+      preselectedPaths: true,
+    })
+    expect(result.matches).toEqual([])
   }, 30_000)
 })

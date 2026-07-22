@@ -26,4 +26,12 @@ This distribution directly depends on the following projects. Their licenses app
 - License: BlueOak Model License 1.0.0
 - Copyright: minimatch contributors
 
+## ignore
+
+- Package: `ignore`
+- Version: `7.0.6`
+- Project: <https://github.com/kaelzhang/node-ignore>
+- License: MIT
+- Copyright: ignore contributors
+
 Complete dependency and license information is available from the exact versions recorded in `package-lock.json`.

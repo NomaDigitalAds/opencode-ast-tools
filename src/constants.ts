@@ -36,6 +36,7 @@ export const HARD_LIMITS = {
   patternBytes: 8 * 1024,
   replacementBytes: 8 * 1024,
   fileBytes: 5 * 1024 * 1024,
+  discoveredFiles: 10_000,
   searchResults: 200,
   changedFiles: 200,
   replacements: 2_000,

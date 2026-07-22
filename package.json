@@ -33,6 +33,7 @@
   "dependencies": {
     "@ast-grep/cli": "0.44.1",
     "@opencode-ai/plugin": "1.18.4",
+    "ignore": "7.0.6",
     "minimatch": "10.2.5"
   },
   "devDependencies": {
@@ -44,7 +45,7 @@
     "vitest": "4.1.10"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.0.0 || >=22"
   },
   "keywords": [
     "opencode",
