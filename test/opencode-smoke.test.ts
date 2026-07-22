@@ -156,9 +156,11 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
   beforeAll(async () => {
     root = await mkdtemp(path.join(tmpdir(), "opencode-ast-tools-smoke-"))
     project = path.join(root, "project")
+    await mkdir(path.join(project, "src"), { recursive: true })
+    project = await realpath(project)
     sourcePath = path.join(project, "src", "main.ts")
-    await mkdir(path.dirname(sourcePath), { recursive: true })
     await writeFile(sourcePath, originalSource)
+    await execFileAsync("git", ["init", "--quiet"], { cwd: project, timeout: 30_000 })
 
     mock = await startMockOpenAI({
       async beforeApply(scenario) {
@@ -283,7 +285,7 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
         `Packed plugin tools are missing: ${JSON.stringify(ids.data)}\n${serverOutput}\n${await smokeDiagnostics()}`,
       )
     }
-  }, 90_000)
+  }, 180_000)
 
   it("searches and previews without modifying files", async () => {
     await writeFile(sourcePath, originalSource)
