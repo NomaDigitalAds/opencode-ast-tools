@@ -15,10 +15,7 @@ Already implemented:
 - CI, dependency review, SBOM, provenance, and npm release workflows.
 - Tarball installation, tool execution, permission handling, timeout, and cancellation in a real OpenCode instance.
 - Deterministic discovery capped at 10,000 language-eligible files with platform-safe command chunking.
-
-Not yet proven end-to-end:
-
-- Fault-injected flush, rename, and partial rollback behavior.
+- Fault-injected staging, cleanup, commit, rollback, and path-swap coverage.
 
 ## Phase 1: CI Baseline
 
@@ -64,6 +61,8 @@ Goal: close the main known gap in the specification.
 Exit criterion: discovery stops deterministically at the limit and reports truncation without reading outside the authorized scope.
 
 ## Phase 4: Write Failure Testing
+
+Status: complete.
 
 Goal: prove the staging guarantees and precisely document partial failures.
 

@@ -15,6 +15,7 @@ export type AstToolErrorCode =
   | "PLAN_OWNER_MISMATCH"
   | "STALE_PLAN"
   | "STAGING_FAILED"
+  | "COMMIT_FAILED"
   | "COMMIT_PARTIAL"
   | "ABORTED"
 
