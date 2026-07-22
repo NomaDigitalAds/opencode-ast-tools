@@ -99,7 +99,9 @@ Apply does not accept paths, patterns, replacements, caller-provided edits, `for
 - Apply rechecks every source hash before staging and immediately before commit. A stale plan writes no files.
 - Outputs are bounded, terminal control characters are removed from model-facing text, and invalid engine JSON is an error rather than an empty result.
 
-Each file is replaced with a same-directory rename when the filesystem supports atomic rename. A multi-file apply is not a crash-recoverable transaction: a failure during the rename sequence can produce a partial commit. The plugin keeps original bytes through commit, attempts best-effort rollback, and reports `COMMIT_PARTIAL` if that sequence fails.
+Each file is replaced with a same-directory rename when the filesystem supports atomic rename. A multi-file apply is not a crash-recoverable transaction: a failure during the rename sequence can produce a partial commit. The plugin keeps original bytes through commit, attempts best-effort rollback, and reports `COMMIT_PARTIAL` if at least one file was replaced or `COMMIT_FAILED` if none were.
+
+These checks detect known path, content, and mode changes immediately before each rename. Portable Node.js does not provide directory-relative `renameat` operations, so the final pathname check and rename cannot be one atomic operation. The apply guarantees assume no hostile process with permission to rename entries in target directories during that final interval.
 
 ## Development
 
