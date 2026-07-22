@@ -2,6 +2,8 @@
 
 Safe structural search and AST refactoring for OpenCode, powered by the official `ast-grep` CLI.
 
+This project is in public alpha. Pin an exact version and review previews before applying them.
+
 The plugin deliberately separates preview from writing:
 
 - `ast_grep_search` searches syntax trees and never writes files.
@@ -14,7 +16,7 @@ Pin the plugin version in `opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-ast-tools@0.1.0"]
+  "plugin": ["opencode-ast-tools@0.1.0-alpha.1"]
 }
 ```
 
@@ -24,7 +26,7 @@ Optional limits can be provided with the plugin entry:
 {
   "plugin": [
     [
-      "opencode-ast-tools@0.1.0",
+      "opencode-ast-tools@0.1.0-alpha.1",
       {
         "limits": {
           "maxSearchResults": 50,
@@ -102,6 +104,16 @@ Apply does not accept paths, patterns, replacements, caller-provided edits, `for
 Each file is replaced with a same-directory rename when the filesystem supports atomic rename. A multi-file apply is not a crash-recoverable transaction: a failure during the rename sequence can produce a partial commit. The plugin keeps original bytes through commit, attempts best-effort rollback, and reports `COMMIT_PARTIAL` if at least one file was replaced or `COMMIT_FAILED` if none were.
 
 These checks detect known path, content, and mode changes immediately before each rename. Portable Node.js does not provide directory-relative `renameat` operations, so the final pathname check and rename cannot be one atomic operation. The apply guarantees assume no hostile process with permission to rename entries in target directories during that final interval.
+
+## Alpha Limitations
+
+- Plans are held in memory and do not survive an OpenCode restart.
+- Multi-file apply is not crash-recoverable; inspect `COMMIT_PARTIAL` failures before retrying.
+- Discovery stops at 10,000 eligible files, individual files are limited to 5 MiB, and only the listed built-in languages are supported.
+- npm-based hosts require Node.js `^22.22.2`, `^24.15.0`, or `>=26` because of the production dependency graph.
+- The final pathname validation and rename have the portable Node.js race described in the safety model.
+
+Errors include a stable category prefix such as `[STALE_PLAN]`, `[LIMIT_EXCEEDED]`, or `[COMMIT_PARTIAL]`. When reporting a bug, open a [GitHub issue](https://github.com/NomaDigitalAds/opencode-ast-tools/issues) with the package and OpenCode versions, operating system, error category, and minimal reproduction. Remove source code, paths, credentials, and other sensitive data before posting logs.
 
 ## Development
 

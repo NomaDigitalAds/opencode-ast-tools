@@ -1,9 +1,22 @@
 {
   "name": "opencode-ast-tools",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Safe structural search and AST refactoring tools for OpenCode",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NomaDigitalAds/opencode-ast-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NomaDigitalAds/opencode-ast-tools/issues"
+  },
+  "homepage": "https://github.com/NomaDigitalAds/opencode-ast-tools#readme",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "tag": "alpha"
+  },
   "files": [
     "dist",
     "README.md",
@@ -25,6 +38,8 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "check:test": "tsc -p tsconfig.test.json",
+    "check:package": "node scripts/check-package.mjs",
+    "pack:release": "node scripts/check-package.mjs --pack",
     "test": "vitest run",
     "test:integration": "vitest run test/engine-integration.test.ts",
     "test:opencode": "npm run build && vitest run test/opencode-smoke.test.ts",
@@ -45,7 +60,7 @@
     "vitest": "4.1.10"
   },
   "engines": {
-    "node": "^20.0.0 || >=22"
+    "node": "^22.22.2 || ^24.15.0 || >=26"
   },
   "keywords": [
     "opencode",

@@ -35,7 +35,7 @@ jobs:
         env:
           OPENCODE_SMOKE: "1"
       - run: npx --no-install ast-grep --version
-      - run: npm pack --dry-run
+      - run: npm run check:package
 
   dependency-review:
     if: github.event_name == 'pull_request'

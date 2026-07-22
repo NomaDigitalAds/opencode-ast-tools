@@ -77,6 +77,8 @@ Exit criterion: every apply guarantee has a corresponding failure-path test.
 
 ## Phase 5: Public Alpha
 
+Status: in progress.
+
 Goal: publish a usable version without promising premature stability.
 
 - Review the README, examples, error messages, and third-party notices.
