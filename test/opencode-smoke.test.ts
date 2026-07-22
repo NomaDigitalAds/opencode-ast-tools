@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url"
 import { createServer } from "node:net"
 import { spawn, execFile, type ChildProcess } from "node:child_process"
 import { promisify } from "node:util"
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { createOpencodeClient, type PermissionAction, type PermissionRule, type ToolPart } from "@opencode-ai/sdk/v2"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -182,26 +182,24 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
     const home = path.join(root, "home")
     const configDirectory = path.join(home, ".config", "opencode")
     await Promise.all([mkdir(configDirectory, { recursive: true }), mkdir(path.join(home, "tmp"), { recursive: true })])
-    await execFileAsync(
-      process.execPath,
-      [
-        npmCli,
-        "install",
-        "--prefix",
-        configDirectory,
-        "--ignore-scripts",
-        "--offline",
-        "--no-audit",
-        "--no-fund",
-        path.join(project, packageName),
-        "@ai-sdk/openai-compatible@3.0.14",
-      ],
-      { cwd: project, timeout: 60_000 },
-    )
-    console.log("[opencode-smoke] installed isolated dependencies")
-    const pluginEntry = pathToFileURL(
-      path.join(configDirectory, "node_modules", "opencode-ast-tools", "dist", "plugin.js"),
-    ).href
+    const extracted = path.join(root, "packed")
+    await mkdir(extracted)
+    await execFileAsync("tar", ["-xzf", path.join(project, packageName), "-C", extracted], {
+      cwd: project,
+      timeout: 30_000,
+    })
+    const rootNodeModules = path.join(process.cwd(), "node_modules")
+    const linkType = process.platform === "win32" ? "junction" : "dir"
+    await Promise.all([
+      symlink(rootNodeModules, path.join(extracted, "package", "node_modules"), linkType),
+      symlink(rootNodeModules, path.join(configDirectory, "node_modules"), linkType),
+      writeFile(
+        path.join(configDirectory, "package.json"),
+        JSON.stringify({ dependencies: { "@ai-sdk/openai-compatible": "3.0.14" } }),
+      ),
+    ])
+    console.log("[opencode-smoke] extracted packed artifact")
+    const pluginEntry = pathToFileURL(path.join(extracted, "package", "dist", "plugin.js")).href
     const config = {
       $schema: "https://opencode.ai/config.json",
       logLevel: "DEBUG",
