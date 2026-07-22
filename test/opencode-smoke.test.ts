@@ -175,6 +175,7 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
       cwd: process.cwd(),
       timeout: 120_000,
     })
+    console.log("[opencode-smoke] packed npm artifact")
     const packageName = (JSON.parse(packed.stdout) as Array<{ filename: string }>)[0]?.filename
     if (!packageName) throw new Error("npm pack did not return a package filename")
 
@@ -189,13 +190,15 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
         "--prefix",
         configDirectory,
         "--ignore-scripts",
+        "--offline",
         "--no-audit",
         "--no-fund",
         path.join(project, packageName),
         "@ai-sdk/openai-compatible@3.0.14",
       ],
-      { cwd: project, timeout: 120_000 },
+      { cwd: project, timeout: 60_000 },
     )
+    console.log("[opencode-smoke] installed isolated dependencies")
     const pluginEntry = pathToFileURL(
       path.join(configDirectory, "node_modules", "opencode-ast-tools", "dist", "plugin.js"),
     ).href
@@ -246,6 +249,7 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
 
     const baseUrl = `http://127.0.0.1:${port}`
     await waitForHealth(baseUrl)
+    console.log("[opencode-smoke] OpenCode server is healthy")
     client = createOpencodeClient({ baseUrl, directory: await realpath(project) })
   }, 180_000)
 
