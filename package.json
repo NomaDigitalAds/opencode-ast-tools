@@ -1,0 +1,46 @@
+{
+  "name": "opencode-ast-tools",
+  "version": "0.1.0",
+  "description": "Safe structural search and AST refactoring tools for OpenCode",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "ROADMAP.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run test/engine-integration.test.ts",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@ast-grep/cli": "0.44.1",
+    "@opencode-ai/plugin": "1.18.4",
+    "minimatch": "10.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "opencode",
+    "ast-grep",
+    "codemod",
+    "refactoring"
+  ]
+}
