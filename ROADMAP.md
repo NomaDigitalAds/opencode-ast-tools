@@ -14,10 +14,10 @@ Already implemented:
 - Unit tests, integration fixtures for all 25 languages on every Tier 1 platform, and npm package builds.
 - CI, dependency review, SBOM, provenance, and npm release workflows.
 - Tarball installation, tool execution, permission handling, timeout, and cancellation in a real OpenCode instance.
+- Deterministic discovery capped at 10,000 language-eligible files with platform-safe command chunking.
 
 Not yet proven end-to-end:
 
-- An exact 10,000-file discovery limit.
 - Fault-injected flush, rename, and partial rollback behavior.
 
 ## Phase 1: CI Baseline
@@ -50,6 +50,8 @@ Goal: prove the package inside the host that will actually consume it.
 Exit criterion: all three tools work inside OpenCode, and an `edit: deny` policy prevents every write.
 
 ## Phase 3: Discovery And Limits
+
+Status: complete.
 
 Goal: close the main known gap in the specification.
 
