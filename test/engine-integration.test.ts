@@ -89,4 +89,30 @@ describe.runIf(integration)("ast-grep language matrix", () => {
       expect(rewrite.matches.some((match) => match.replacement !== undefined)).toBe(true)
     }, 30_000)
   }
+
+  it("honors timeout and abort while the native process is running", async () => {
+    const request = {
+      pattern: "console.log($ARG)",
+      language: "typescript" as const,
+      paths: ["typescript.ts"],
+      include: [],
+      exclude: [],
+      contextLines: 0,
+      respectGitignore: true,
+      allowIgnoredFiles: false,
+      cwd: directory,
+    }
+    await expect(
+      runEngine(engine, {
+        ...request,
+        timeoutMs: 1,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "ENGINE_TIMEOUT" })
+
+    const controller = new AbortController()
+    const aborted = runEngine(engine, { ...request, timeoutMs: 15_000, signal: controller.signal })
+    setTimeout(() => controller.abort(), 1)
+    await expect(aborted).rejects.toMatchObject({ code: "ABORTED" })
+  }, 30_000)
 })

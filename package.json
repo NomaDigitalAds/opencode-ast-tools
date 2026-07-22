@@ -15,13 +15,19 @@
     ".": {
       "types": "./dist/plugin.d.ts",
       "import": "./dist/plugin.js"
+    },
+    "./server": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
+    "check:test": "tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:integration": "vitest run test/engine-integration.test.ts",
+    "test:opencode": "npm run build && vitest run test/opencode-smoke.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -30,7 +36,9 @@
     "minimatch": "10.2.5"
   },
   "devDependencies": {
+    "@opencode-ai/sdk": "1.18.4",
     "@types/node": "24.0.14",
+    "opencode-ai": "1.18.4",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   },

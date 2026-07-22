@@ -28,8 +28,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run check:test
       - run: npm test
       - run: npm run build
+      - run: npm run test:opencode
+        env:
+          OPENCODE_SMOKE: "1"
       - run: npx --no-install ast-grep --version
       - run: npm pack --dry-run
 

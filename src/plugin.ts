@@ -1,4 +1,4 @@
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Plugin, PluginModule } from "@opencode-ai/plugin"
 import { ENGINE_VERSION } from "./constants.js"
 import { parseConfig } from "./config.js"
 import { resolveEngine } from "./engine/cli.js"
@@ -21,4 +21,7 @@ export const AstToolsPlugin: Plugin = async (_input, options) => {
   }
 }
 
-export default AstToolsPlugin
+export default {
+  id: "opencode-ast-tools",
+  server: AstToolsPlugin,
+} satisfies PluginModule

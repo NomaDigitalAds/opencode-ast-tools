@@ -35,6 +35,19 @@ export type EngineResult = {
 
 const require = createRequire(import.meta.url)
 
+function platformEnginePackage(): { name: string; binary: string } | undefined {
+  const platform = `${process.platform}-${process.arch}`
+  const packages: Record<string, { name: string; binary: string }> = {
+    "darwin-arm64": { name: "@ast-grep/cli-darwin-arm64", binary: "ast-grep" },
+    "darwin-x64": { name: "@ast-grep/cli-darwin-x64", binary: "ast-grep" },
+    "linux-arm64": { name: "@ast-grep/cli-linux-arm64-gnu", binary: "ast-grep" },
+    "linux-x64": { name: "@ast-grep/cli-linux-x64-gnu", binary: "ast-grep" },
+    "win32-arm64": { name: "@ast-grep/cli-win32-arm64-msvc", binary: "ast-grep.exe" },
+    "win32-x64": { name: "@ast-grep/cli-win32-x64-msvc", binary: "ast-grep.exe" },
+  }
+  return packages[platform]
+}
+
 export function resolveEngine(expectedVersion: string): Engine {
   let packagePath: string
   try {
@@ -49,7 +62,20 @@ export function resolveEngine(expectedVersion: string): Engine {
       `expected ast-grep ${expectedVersion}, found ${String(packageJson.version)}`,
     )
   }
-  const executable = path.join(path.dirname(packagePath), process.platform === "win32" ? "ast-grep.exe" : "ast-grep")
+  const packageDirectory = path.dirname(packagePath)
+  let executable = ""
+  const platformPackage = platformEnginePackage()
+  if (platformPackage) {
+    try {
+      const platformPackagePath = require.resolve(`${platformPackage.name}/package.json`, {
+        paths: [packageDirectory],
+      })
+      executable = path.join(path.dirname(platformPackagePath), platformPackage.binary)
+    } catch {}
+  }
+  if (!existsSync(executable)) {
+    executable = path.join(packageDirectory, process.platform === "win32" ? "ast-grep.exe" : "ast-grep")
+  }
   if (!existsSync(executable)) {
     throw new AstToolError("ENGINE_OUTPUT_INVALID", "the @ast-grep/cli platform executable is missing")
   }
