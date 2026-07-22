@@ -2,7 +2,7 @@
 
 Safe structural search and AST refactoring for OpenCode, powered by the official `ast-grep` CLI.
 
-This project is in public alpha. Pin an exact version and review previews before applying them.
+This project is in public alpha. Pin an exact version and review previews before applying them. The npm `alpha` and `latest` tags both resolve to the initial alpha while it is the only published version; neither tag is a stability guarantee.
 
 The plugin deliberately separates preview from writing:
 
