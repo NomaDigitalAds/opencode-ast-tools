@@ -254,7 +254,7 @@ describe.runIf(smoke)("OpenCode package smoke", () => {
   afterAll(async () => {
     await stopProcess(opencode)
     await mock?.close()
-    if (root) await rm(root, { recursive: true, force: true })
+    if (root) await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   })
 
   async function runScenario(marker: string, rules: PermissionRule[], reply?: "once" | "reject") {
