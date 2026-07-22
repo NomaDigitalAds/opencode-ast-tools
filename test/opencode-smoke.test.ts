@@ -50,7 +50,7 @@ async function waitForHealth(baseUrl: string): Promise<void> {
   while (Date.now() < deadline) {
     if (opencode?.exitCode !== null) throw new Error(`OpenCode exited during startup\n${serverOutput}`)
     try {
-      const response = await fetch(`${baseUrl}/global/health`)
+      const response = await fetch(`${baseUrl}/global/health`, { signal: AbortSignal.timeout(2_000) })
       if (response.ok) return
       diagnostic = `HTTP ${response.status}: ${await response.text()}`
     } catch (error) {
@@ -58,7 +58,7 @@ async function waitForHealth(baseUrl: string): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
-  throw new Error(`OpenCode did not become healthy (${diagnostic})\n${serverOutput}`)
+  throw new Error(`OpenCode did not become healthy (${diagnostic})\n${serverOutput}\n${await smokeDiagnostics()}`)
 }
 
 async function stopProcess(child: ChildProcess | undefined): Promise<void> {
